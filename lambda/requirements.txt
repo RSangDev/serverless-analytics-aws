@@ -1,0 +1,6 @@
+# Lambda requirements
+# Note: boto3 is already included in Lambda runtime
+# Only add if you need specific versions
+
+# No additional requirements needed for this project!
+# boto3, json, datetime, uuid are all in standard library

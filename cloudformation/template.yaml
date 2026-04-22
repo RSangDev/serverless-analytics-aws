@@ -1,0 +1,288 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Serverless Analytics API - 100% Free Tier Compatible'
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: analytics-api
+    Description: Project name for resource naming
+
+Resources:
+  # DynamoDB Table
+  AnalyticsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-events'
+      BillingMode: PAY_PER_REQUEST  # Free Tier: 25GB storage + 25 WCU + 25 RCU
+      AttributeDefinitions:
+        - AttributeName: event_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: event_id
+          KeyType: HASH
+      TimeToLiveSpecification:
+        Enabled: true
+        AttributeName: ttl
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # Lambda Execution Role
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:Scan
+                  - dynamodb:Query
+                  - dynamodb:DeleteItem
+                Resource: !GetAtt AnalyticsTable.Arn
+
+  # Lambda Function
+  AnalyticsFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-function'
+      Runtime: python3.11
+      Handler: handler.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
+      MemorySize: 256  # Free Tier: 400,000 GB-seconds/month
+      Environment:
+        Variables:
+          DYNAMODB_TABLE: !Ref AnalyticsTable
+      Code:
+        ZipFile: |
+          import json
+          def lambda_handler(event, context):
+              return {
+                  'statusCode': 200,
+                  'body': json.dumps({'message': 'Deploy your code!'})
+              }
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # Lambda Permission for API Gateway
+  LambdaApiPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref AnalyticsFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${AnalyticsApi}/*'
+
+  # API Gateway
+  AnalyticsApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub '${ProjectName}-api'
+      Description: Serverless Analytics API
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  # API Gateway Resource /events
+  EventsResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt AnalyticsApi.RootResourceId
+      PathPart: events
+      RestApiId: !Ref AnalyticsApi
+
+  # API Gateway Resource /events/recent
+  RecentResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !Ref EventsResource
+      PathPart: recent
+      RestApiId: !Ref AnalyticsApi
+
+  # API Gateway Resource /stats
+  StatsResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt AnalyticsApi.RootResourceId
+      PathPart: stats
+      RestApiId: !Ref AnalyticsApi
+
+  # API Gateway Resource /health
+  HealthResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt AnalyticsApi.RootResourceId
+      PathPart: health
+      RestApiId: !Ref AnalyticsApi
+
+  # POST /events
+  PostEventsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: POST
+      ResourceId: !Ref EventsResource
+      RestApiId: !Ref AnalyticsApi
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${AnalyticsFunction.Arn}/invocations'
+
+  # GET /stats
+  GetStatsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: GET
+      ResourceId: !Ref StatsResource
+      RestApiId: !Ref AnalyticsApi
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${AnalyticsFunction.Arn}/invocations'
+
+  # GET /events/recent
+  GetRecentMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: GET
+      ResourceId: !Ref RecentResource
+      RestApiId: !Ref AnalyticsApi
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${AnalyticsFunction.Arn}/invocations'
+
+  # GET /health
+  GetHealthMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: GET
+      ResourceId: !Ref HealthResource
+      RestApiId: !Ref AnalyticsApi
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${AnalyticsFunction.Arn}/invocations'
+
+  # DELETE /events
+  DeleteEventsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: DELETE
+      ResourceId: !Ref EventsResource
+      RestApiId: !Ref AnalyticsApi
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${AnalyticsFunction.Arn}/invocations'
+
+  # CORS for /events
+  EventsOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      ResourceId: !Ref EventsResource
+      RestApiId: !Ref AnalyticsApi
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Api-Key'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  # API Deployment
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - PostEventsMethod
+      - GetStatsMethod
+      - GetRecentMethod
+      - GetHealthMethod
+      - DeleteEventsMethod
+    Properties:
+      RestApiId: !Ref AnalyticsApi
+      StageName: prod
+
+  # S3 Bucket for Dashboard
+  DashboardBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${ProjectName}-dashboard-${AWS::AccountId}'
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: index.html
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # S3 Bucket Policy for Public Read
+  DashboardBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref DashboardBucket
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action: s3:GetObject
+            Resource: !Sub '${DashboardBucket.Arn}/*'
+
+Outputs:
+  ApiEndpoint:
+    Description: API Gateway endpoint URL
+    Value: !Sub 'https://${AnalyticsApi}.execute-api.${AWS::Region}.amazonaws.com/prod'
+    Export:
+      Name: !Sub '${ProjectName}-api-endpoint'
+
+  DashboardURL:
+    Description: Dashboard website URL
+    Value: !GetAtt DashboardBucket.WebsiteURL
+    Export:
+      Name: !Sub '${ProjectName}-dashboard-url'
+
+  DynamoDBTable:
+    Description: DynamoDB table name
+    Value: !Ref AnalyticsTable
+    Export:
+      Name: !Sub '${ProjectName}-table'
+
+  LambdaFunction:
+    Description: Lambda function name
+    Value: !Ref AnalyticsFunction
+    Export:
+      Name: !Sub '${ProjectName}-function'
