@@ -172,7 +172,7 @@ zip -r function.zip handler.py
 cd ..
 
 # Create S3 bucket for deployment (replace BUCKET_NAME)
-aws s3 mb s3://YOUR-BUCKET-NAME-analytics-deploy
+aws s3 mb s3://serverless-analytics-proj-analytics-deploy
 
 # Package CloudFormation template
 aws cloudformation package \

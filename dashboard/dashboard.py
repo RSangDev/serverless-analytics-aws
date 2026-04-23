@@ -47,8 +47,9 @@ with st.sidebar:
     # API Endpoint input
     api_endpoint = st.text_input(
         "API Gateway Endpoint",
-        value=st.session_state.api_endpoint,
-        placeholder="https://your-api.execute-api.region.amazonaws.com/prod",
+        value = "https://tl22hztl73.execute-api.us-east-2.amazonaws.com/prod",
+        # value=st.session_state.api_endpoint,
+        placeholder="https://tl22hztl73.execute-api.us-east-2.amazonaws.com/prod",
         help="Enter your API Gateway endpoint from CloudFormation outputs"
     )
     
