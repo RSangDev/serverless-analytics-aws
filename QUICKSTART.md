@@ -24,7 +24,7 @@ aws configure
 
 ```bash
 # Clone repository
-git clone <your-repo-url>
+git clone <https://github.com/RSangDev/serverless-analytics-aws>
 cd serverless-analytics-aws
 
 # Deploy (one command!)
