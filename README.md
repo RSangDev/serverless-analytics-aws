@@ -562,12 +562,11 @@ serverless-analytics-aws/
    - Blue/green deployments
 
 ---
+## 📸 Screenshots
 
-## 📝 License
+### Dashboard
+![Dashboard](docs/screenshots/aws-pic1.jpg)
 
-MIT License - See [LICENSE](LICENSE) file
-
----
 
 ## 🤝 Contributing
 
